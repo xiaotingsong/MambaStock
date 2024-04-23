@@ -9,7 +9,7 @@ from mamba import Mamba, MambaConfig
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--use-cuda', default=False,
+parser.add_argument('--use-cuda', default=True,
                     help='CUDA training.')
 parser.add_argument('--seed', type=int, default=1, help='Random seed.')
 parser.add_argument('--epochs', type=int, default=100,
@@ -62,14 +62,13 @@ class Net(nn.Module):
             nn.Linear(args.hidden,out_dim),
             nn.Tanh()
         )
-    
     def forward(self,x):
         x = self.mamba(x)
         return x.flatten()
 
 def PredictWithData(trainX, trainy, testX):
     clf = Net(len(trainX[0]),1)
-    opt = torch.optim.Adam(clf.parameters(),lr=args.lr,weight_decay=args.wd)
+    opt = torch.optim.Adam(clf.parameters(), lr=args.lr, weight_decay=args.wd)
     xt = torch.from_numpy(trainX).float().unsqueeze(0)
     xv = torch.from_numpy(testX).float().unsqueeze(0)
     yt = torch.from_numpy(trainy).float()

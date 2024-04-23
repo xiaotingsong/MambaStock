@@ -127,6 +127,7 @@ class MambaBlock(nn.Module):
                               kernel_size=config.d_conv, bias=config.conv_bias, 
                               groups=config.d_inner,
                               padding=config.d_conv - 1)
+        # padding = 3 means
         
         # projects x to input-dependent Δ, B, C
         self.x_proj = nn.Linear(config.d_inner, config.dt_rank + 2 * config.d_state, bias=False)
@@ -190,20 +191,24 @@ class MambaBlock(nn.Module):
     
     def ssm(self, x):
         # x : (B, L, ED)
-
         # y : (B, L, ED)
 
+        # x: [1, 3381, 32]
         A = -torch.exp(self.A_log.float()) # (ED, N)
+        # A: [32, 16]
         D = self.D.float()
-        # TODO remove .float()
-
+        # D: [32]
         deltaBC = self.x_proj(x) # (B, L, dt_rank+2*N)
+        # deltaBC: [1, 3381, 33]
 
         delta, B, C = torch.split(deltaBC, [self.config.dt_rank, self.config.d_state, self.config.d_state], dim=-1) # (B, L, dt_rank), (B, L, N), (B, L, N)
+        # delta: [1, 3381, 1], B:[1, 3381, 16], C:[1, 3381, 16]
         delta = F.softplus(self.dt_proj(delta)) # (B, L, ED)
+        # delta: [1, 3381, 32]
 
         if self.config.pscan:
             y = self.selective_scan(x, delta, A, B, C, D)
+            # y: [1, 3381, 32]
         else:
             y = self.selective_scan_seq(x, delta, A, B, C, D)
 
@@ -220,14 +225,18 @@ class MambaBlock(nn.Module):
         # y : (B, L, ED)
 
         deltaA = torch.exp(delta.unsqueeze(-1) * A) # (B, L, ED, N)
+        # deltaA: [1, 3381, 32, 16]
+        # B: [1, 3381, 16]
         deltaB = delta.unsqueeze(-1) * B.unsqueeze(2) # (B, L, ED, N)
-
+        # deltaB: [1, 3381, 32, 16]
+        # x: [1, 3381, 32]
         BX = deltaB * (x.unsqueeze(-1)) # (B, L, ED, N)
-        
+        # BX: [1, 3381, 32, 16]
         hs = pscan(deltaA, BX)
-
+        # hs: [1, 3381, 32, 16]
+        # C: [1, 3381, 16]
         y = (hs @ C.unsqueeze(-1)).squeeze(3) # (B, L, ED, N) @ (B, L, N, 1) -> (B, L, ED, 1)
-
+        # y: [1, 3381, 32]
         y = y + D * x
 
         return y
